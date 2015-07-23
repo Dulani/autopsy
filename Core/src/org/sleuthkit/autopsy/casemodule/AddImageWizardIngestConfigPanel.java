@@ -238,9 +238,7 @@ class AddImageWizardIngestConfigPanel implements WizardDescriptor.Panel<WizardDe
          // get the selected DSProcessor
         dsProcessor =  dataSourcePanel.getComponent().getCurrentDSProcessor();
         
-        new Thread(() -> {
-            Case.getCurrentCase().notifyAddingNewDataSource(dataSourceId);
-        }).start();
+        Case.getCurrentCase().notifyAddingNewDataSource(dataSourceId);
         DataSourceProcessorCallback cbObj = new DataSourceProcessorCallback () {
             @Override
             public void doneEDT(DataSourceProcessorCallback.DataSourceProcessorResult result, List<String> errList,  List<Content> contents)  {
@@ -260,9 +258,7 @@ class AddImageWizardIngestConfigPanel implements WizardDescriptor.Panel<WizardDe
      * Cancels the data source processing - in case the users presses 'Cancel'
      */
     private void cancelDataSourceProcessing(UUID dataSourceId) {
-        new Thread(() -> {
-            Case.getCurrentCase().notifyFailedAddingNewDataSource(dataSourceId);
-        }).start();
+        Case.getCurrentCase().notifyFailedAddingNewDataSource(dataSourceId);
         dsProcessor.cancel();
     }
     
@@ -311,14 +307,11 @@ class AddImageWizardIngestConfigPanel implements WizardDescriptor.Panel<WizardDe
         newContents.addAll(contents);
         
         //notify the UI of the new content added to the case
-        new Thread(() -> {
-            if (!newContents.isEmpty()) {            
-                 Case.getCurrentCase().notifyNewDataSource(newContents.get(0), dataSourceId);
-            } else {
-                 Case.getCurrentCase().notifyFailedAddingNewDataSource(dataSourceId);
-            }
-        }).start();
-
+        if (!newContents.isEmpty()) {            
+             Case.getCurrentCase().notifyNewDataSource(newContents.get(0), dataSourceId);
+        } else {
+             Case.getCurrentCase().notifyFailedAddingNewDataSource(dataSourceId);
+        }
         
        // Start ingest if we can
         progressPanel.setStateStarted();

@@ -104,17 +104,14 @@ public class IngestManager {
     private int numberOfFileIngestThreads;
     private final ExecutorService fileIngestThreadPool;
 
-    private static final String JOB_EVENT_CHANNEL_NAME = "%s-Ingest-Job-Events";
-    private static final String MODULE_EVENT_CHANNEL_NAME = "%s-Ingest-Module-Events";
+    private static final String INGEST_EVENT_CHANNEL_NAME = "%s-Ingest-Events";
     private static final Set<String> jobEventNames = Stream.of(IngestJobEvent.values())
             .map(IngestJobEvent::toString)
             .collect(Collectors.toSet());
     private static final Set<String> moduleEventNames = Stream.of(IngestModuleEvent.values())
             .map(IngestModuleEvent::toString)
             .collect(Collectors.toSet());
-    private AutopsyEventPublisher jobEventPublisher;
-    private AutopsyEventPublisher moduleEventPublisher;
-    private final ExecutorService eventPublishingExecutor;
+    private AutopsyEventPublisher eventPublisher;
 
     /**
      * The ingest manager uses an ingest monitor to determine when system
@@ -264,9 +261,7 @@ public class IngestManager {
         this.ingestThreadActivitySnapshots = new ConcurrentHashMap<>();
         this.ingestErrorMessagePosts = new AtomicLong(0L);
         this.ingestMonitor = new IngestMonitor();
-        this.eventPublishingExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("IM-ingest-events-%d").build()); //NON-NLS
-        this.jobEventPublisher = new AutopsyEventPublisher();
-        this.moduleEventPublisher = new AutopsyEventPublisher();
+        this.eventPublisher = new AutopsyEventPublisher();
         this.dataSourceIngestThreadPool = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("IM-data-source-ingest-%d").build()); //NON-NLS
         this.startIngestJobsThreadPool = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("IM-start-ingest-jobs-%d").build()); //NON-NLS
         this.nextThreadId = new AtomicLong(0L);
@@ -388,8 +383,7 @@ public class IngestManager {
             Case openedCase = Case.getCurrentCase();
             String channelPrefix = openedCase.getTextIndexName();
             if (Case.CaseType.MULTI_USER_CASE == openedCase.getCaseType()) {
-                jobEventPublisher.openRemoteEventChannel(String.format(JOB_EVENT_CHANNEL_NAME, channelPrefix));
-                moduleEventPublisher.openRemoteEventChannel(String.format(MODULE_EVENT_CHANNEL_NAME, channelPrefix));
+                eventPublisher.openRemoteEventChannel(String.format(INGEST_EVENT_CHANNEL_NAME, channelPrefix));
             }
         } catch (IllegalStateException | AutopsyEventException ex) {
             logger.log(Level.SEVERE, "Failed to open remote events channel", ex); //NON-NLS
@@ -399,8 +393,7 @@ public class IngestManager {
     }
 
     synchronized void handleCaseClosed() {
-        jobEventPublisher.closeRemoteEventChannel();
-        moduleEventPublisher.closeRemoteEventChannel();
+        eventPublisher.closeRemoteEventChannel();
         this.jobCreationIsEnabled = false;
         cancelAllIngestJobs();
         clearIngestMessageBox();
@@ -630,7 +623,7 @@ public class IngestManager {
      * @param listener The PropertyChangeListener to register.
      */
     public void addIngestJobEventListener(final PropertyChangeListener listener) {
-        jobEventPublisher.addSubscriber(jobEventNames, listener);
+        eventPublisher.addSubscriber(jobEventNames, listener);
     }
 
     /**
@@ -639,7 +632,7 @@ public class IngestManager {
      * @param listener The PropertyChangeListener to unregister.
      */
     public void removeIngestJobEventListener(final PropertyChangeListener listener) {
-        jobEventPublisher.removeSubscriber(jobEventNames, listener);
+        eventPublisher.removeSubscriber(jobEventNames, listener);
     }
 
     /**
@@ -648,7 +641,7 @@ public class IngestManager {
      * @param listener The PropertyChangeListener to register.
      */
     public void addIngestModuleEventListener(final PropertyChangeListener listener) {
-        moduleEventPublisher.addSubscriber(moduleEventNames, listener);
+        eventPublisher.addSubscriber(moduleEventNames, listener);
     }
 
     /**
@@ -657,7 +650,7 @@ public class IngestManager {
      * @param listener The PropertyChangeListener to unregister.
      */
     public void removeIngestModuleEventListener(final PropertyChangeListener listener) {
-        moduleEventPublisher.removeSubscriber(moduleEventNames, listener);
+        eventPublisher.removeSubscriber(moduleEventNames, listener);
     }
 
     /**
@@ -669,8 +662,7 @@ public class IngestManager {
      */
     @Deprecated
     public static void addPropertyChangeListener(final PropertyChangeListener listener) {
-        instance.jobEventPublisher.addSubscriber(jobEventNames, listener);
-        instance.moduleEventPublisher.addSubscriber(moduleEventNames, listener);
+        instance.eventPublisher.addSubscriber(jobEventNames, listener);
     }
 
     /**
@@ -682,8 +674,7 @@ public class IngestManager {
      */
     @Deprecated
     public static void removePropertyChangeListener(final PropertyChangeListener listener) {
-        instance.jobEventPublisher.removeSubscriber(jobEventNames, listener);
-        instance.moduleEventPublisher.removeSubscriber(moduleEventNames, listener);
+        instance.eventPublisher.removeSubscriber(jobEventNames, listener);
     }
 
     /**
@@ -693,7 +684,7 @@ public class IngestManager {
      */
     void fireIngestJobStarted(long ingestJobId) {
         AutopsyEvent event = new AutopsyEvent(IngestJobEvent.STARTED.toString(), ingestJobId, null);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -703,7 +694,7 @@ public class IngestManager {
      */
     void fireIngestJobCompleted(long ingestJobId) {
         AutopsyEvent event = new AutopsyEvent(IngestJobEvent.COMPLETED.toString(), ingestJobId, null);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -713,7 +704,7 @@ public class IngestManager {
      */
     void fireIngestJobCancelled(long ingestJobId) {
         AutopsyEvent event = new AutopsyEvent(IngestJobEvent.CANCELLED.toString(), ingestJobId, null);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -725,7 +716,7 @@ public class IngestManager {
      */
     void fireDataSourceAnalysisStarted(long ingestJobId, long dataSourceIngestJobId, Content dataSource) {
         AutopsyEvent event = new DataSourceAnalysisStartedEvent(ingestJobId, dataSourceIngestJobId, dataSource);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -737,7 +728,7 @@ public class IngestManager {
      */
     void fireDataSourceAnalysisCompleted(long ingestJobId, long dataSourceIngestJobId, Content dataSource) {
         AutopsyEvent event = new DataSourceAnalysisCompletedEvent(ingestJobId, dataSourceIngestJobId, dataSource, DataSourceAnalysisCompletedEvent.Reason.ANALYSIS_COMPLETED);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -749,7 +740,7 @@ public class IngestManager {
      */
     void fireDataSourceAnalysisCancelled(long ingestJobId, long dataSourceIngestJobId, Content dataSource) {
         AutopsyEvent event = new DataSourceAnalysisCompletedEvent(ingestJobId, dataSourceIngestJobId, dataSource, DataSourceAnalysisCompletedEvent.Reason.ANALYSIS_CANCELLED);
-        eventPublishingExecutor.submit(new PublishEventTask(event, jobEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -759,7 +750,7 @@ public class IngestManager {
      */
     void fireFileIngestDone(AbstractFile file) {
         AutopsyEvent event = new FileAnalyzedEvent(file);
-        eventPublishingExecutor.submit(new PublishEventTask(event, moduleEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -769,7 +760,7 @@ public class IngestManager {
      */
     void fireIngestModuleDataEvent(ModuleDataEvent moduleDataEvent) {
         AutopsyEvent event = new BlackboardPostEvent(moduleDataEvent);
-        eventPublishingExecutor.submit(new PublishEventTask(event, moduleEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -781,7 +772,7 @@ public class IngestManager {
      */
     void fireIngestModuleContentEvent(ModuleContentEvent moduleContentEvent) {
         AutopsyEvent event = new ContentChangedEvent(moduleContentEvent);
-        eventPublishingExecutor.submit(new PublishEventTask(event, moduleEventPublisher));
+        eventPublisher.publish(event);
     }
 
     /**
@@ -977,36 +968,6 @@ public class IngestManager {
                 }
             }
         }
-    }
-
-    /**
-     * Publishes ingest events to both local and remote subscribers.
-     */
-    private static final class PublishEventTask implements Runnable {
-
-        private final AutopsyEvent event;
-        private final AutopsyEventPublisher publisher;
-
-        /**
-         * Constructs an object that publishes ingest events to both local and
-         * remote subscribers.
-         *
-         * @param event The event to publish.
-         * @param publisher The event publisher.
-         */
-        PublishEventTask(AutopsyEvent event, AutopsyEventPublisher publisher) {
-            this.event = event;
-            this.publisher = publisher;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        @Override
-        public void run() {
-            publisher.publish(event);
-        }
-
     }
 
     static final class IngestThreadActivitySnapshot {

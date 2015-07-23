@@ -18,10 +18,14 @@
  */
 package org.sleuthkit.autopsy.events;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.beans.PropertyChangeListener;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import org.sleuthkit.autopsy.coreutils.Logger;
 
@@ -36,6 +40,7 @@ final class LocalEventPublisher {
 
     private static final Logger logger = Logger.getLogger(LocalEventPublisher.class.getName());
     private final Map<String, Set<PropertyChangeListener>> subscribersByEvent;
+    private ExecutorService eventPublishingExecutor;
 
     /**
      * Constructs an object for publishing events to registered subscribers on
@@ -43,6 +48,7 @@ final class LocalEventPublisher {
      */
     LocalEventPublisher() {
         subscribersByEvent = new ConcurrentHashMap<>();
+        eventPublishingExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("local-events-%d").build()); //NON-NLS        
     }
 
     /**
@@ -52,9 +58,9 @@ final class LocalEventPublisher {
      * @param subscriber The subscriber to add.
      */
     void addSubscriber(Set<String> eventNames, PropertyChangeListener subscriber) {
-        for (String eventName : eventNames) {
+        eventNames.stream().forEach((eventName) -> {
             addSubscriber(eventName, subscriber);
-        }
+        });
     }
 
     /**
@@ -76,9 +82,9 @@ final class LocalEventPublisher {
      * @param subscriber The subscriber to remove.
      */
     void removeSubscriber(Set<String> eventNames, PropertyChangeListener subscriber) {
-        for (String eventName : eventNames) {
+        eventNames.stream().forEach((eventName) -> {
             removeSubscriber(eventName, subscriber);
-        }
+        });
     }
 
     /**
@@ -100,16 +106,41 @@ final class LocalEventPublisher {
      *
      * @param event The event to be published.
      */
-    void publish(AutopsyEvent event) {
-        Set<PropertyChangeListener> subscribers = subscribersByEvent.getOrDefault(event.getPropertyName(), null);
-        if (null != subscribers) {
-            for (PropertyChangeListener subscriber : subscribers) {
-                try {
-                    subscriber.propertyChange(event);
-                } catch (Exception ex) {
-                    logger.log(Level.SEVERE, "Exception thrown by subscriber", ex);
-                }
+    synchronized void publish(AutopsyEvent event) {
+        if (null != eventPublishingExecutor) {
+            Set<PropertyChangeListener> subscribers = subscribersByEvent.getOrDefault(event.getPropertyName(), null);
+            if (null != subscribers) {
+                eventPublishingExecutor.submit(() -> {
+                    subscribers.stream().forEach((subscriber) -> {
+                        try {
+                            subscriber.propertyChange(event);
+                        } catch (Exception ex) {
+                            logger.log(Level.SEVERE, "Exception thrown by subscriber", ex);
+                        }
+                    });
+                });
             }
+        } else {
+            logger.log(Level.SEVERE, "Attempt to publish when already shut down");            
+        }
+    }
+
+    /**
+     * Shuts down this publisher.
+     */
+    synchronized void shutDown() {
+        if (null != eventPublishingExecutor) {
+        eventPublishingExecutor.shutdown();
+        try {
+            while (!eventPublishingExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                logger.log(Level.WARNING, "Waited at least thirty seconds for event publishing executor to shut down, continuing to wait"); //NON-NLS
+            }
+        } catch (InterruptedException ex) {
+            logger.log(Level.SEVERE, "Unexpected interrupt while awaiting termination of event publishing executor");
+        }
+        eventPublishingExecutor = null;
+        } else {
+            logger.log(Level.SEVERE, "Attempt to shut down when already shut down");
         }
     }
 

@@ -653,8 +653,6 @@ public class Case {
      * Notifies case event subscribers (property change listeners) that a data
      * source is being added to the case database.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param dataSourceId A unique identifier for the data source. This UUID
      *                     should be used to call notifyNewDataSource() after the
      *                     data source is added.
@@ -666,8 +664,6 @@ public class Case {
     /**
      * Notifies case event subscribers (property change listeners) that a data
      * source failed to be added to the case database.
-     * 
-     * This should not be called from the event dispatch thread (EDT)
      *
      * @param dataSourceId A unique identifier for the data source.
      */
@@ -679,8 +675,6 @@ public class Case {
      * Notifies case event subscribers (property change listeners) that a data
      * source is being added to the case database.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param newDataSource New data source added.
      * @param dataSourceId  A unique identifier for the data source. Should be
      *                      the same UUID used to call notifyAddingNewDataSource() when the process
@@ -693,8 +687,6 @@ public class Case {
     /**
      * Notifies the UI that a new ContentTag has been added.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param newTag new ContentTag added
      */
     public void notifyContentTagAdded(ContentTag newTag) {
@@ -704,8 +696,6 @@ public class Case {
     /**
      * Notifies the UI that a ContentTag has been deleted.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param deletedTag ContentTag deleted
      */
     public void notifyContentTagDeleted(ContentTag deletedTag) {
@@ -715,8 +705,6 @@ public class Case {
     /**
      * Notifies the UI that a new BlackboardArtifactTag has been added.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param newTag new BlackboardArtifactTag added
      */
     public void notifyBlackBoardArtifactTagAdded(BlackboardArtifactTag newTag) {
@@ -726,8 +714,6 @@ public class Case {
     /**
      * Notifies the UI that a BlackboardArtifactTag has been deleted.
      * 
-     * This should not be called from the event dispatch thread (EDT)
-     *
      * @param deletedTag BlackboardArtifactTag deleted
      */
     public void notifyBlackBoardArtifactTagDeleted(BlackboardArtifactTag deletedTag) {
@@ -796,8 +782,6 @@ public class Case {
     /**
      * Updates the case name.
      * 
-     * This should not be called from the EDT.
-     *
      * @param oldCaseName the old case name that wants to be updated
      * @param oldPath     the old path that wants to be updated
      * @param newCaseName the new case name
@@ -824,8 +808,6 @@ public class Case {
     /**
      * Updates the case examiner
      * 
-     * This should not be called from the EDT.
-     *
      * @param oldExaminer the old examiner
      * @param newExaminer the new examiner
      */
@@ -842,8 +824,6 @@ public class Case {
     /**
      * Updates the case number
      * 
-     * This should not be called from the EDT.
-     *
      * @param oldCaseNumber the old case number
      * @param newCaseNumber the new case number
      */
